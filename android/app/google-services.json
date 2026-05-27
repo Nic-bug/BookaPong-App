@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "869377513341",
+    "firebase_url": "https://bookapong-app-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "bookapong-app",
+    "storage_bucket": "bookapong-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:869377513341:android:f61ee9dc9447ddb2b45e14",
+        "android_client_info": {
+          "package_name": "com.nicoleann.bookapong"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAVJ8h0Nx0xz4Fl_0xOoh6wN6KhpD4S_Ek"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

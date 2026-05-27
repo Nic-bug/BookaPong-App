@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bookapong</title>
+  <style>
+    body { font-family: sans-serif; background: #FDF8F0; display: flex;
+           align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    .card { background: white; border-radius: 20px; padding: 40px 30px;
+            text-align: center; max-width: 360px; width: 90%; }
+    h2 { color: #800020; }
+    p { color: #666; }
+    a { display: block; background: #800020; color: white; padding: 14px;
+        border-radius: 12px; text-decoration: none; font-weight: bold; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div style="font-size:60px">✅</div>
+    <h2>Payment Received</h2>
+    <p>Returning to Bookapong...</p>
+    <a href="bookapong://payment-callback">Tap here if not redirected</a>
+  </div>
+  <script>
+    // Redirect immediately — no delay
+    window.location.href = "bookapong://payment-callback";
+  </script>
+</body>
+</html>
