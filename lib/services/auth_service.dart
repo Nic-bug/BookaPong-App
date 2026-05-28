@@ -7,7 +7,8 @@ class AuthService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   /// Registers a new Arena Administrator across Authentication and Firestore Nodes
-  Future<void> registerAdmin({
+  /// Returns the generated adminUid to act as the payment reference for ToyyibPay
+  Future<String> registerAdmin({
     required String email,
     required String password,
     required String centerName,
@@ -26,26 +27,32 @@ class AuthService {
       await _firestore.collection('users').doc(adminUid).set({
         'name': contactPerson,
         'email': email,
-        'role': 'admin', // Marked distinctly as admin space provider
+        'role': 'admin',
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // 3. Write to 'admins' collection (Used by AdminBookingPage & User Discovery horizontal rows)
+      // 3. Write to 'admins' collection
       await _firestore.collection('admins').doc(adminUid).set({
         'centerName': centerName,
         'email': email,
         'contactPerson': contactPerson,
         'phone': phone,
+
+        // Subscription State Metadata - Flat Fields
         'subscriptionPlan': selectedPlan,
-        'addressLocation':
-            'Address location pending setup', // Placeholder to be populated in profile edit page
+        'subscriptionStatus': 'pending', // System waits for ToyyibPay callback
+
+        'addressLocation': 'Address location pending setup',
         'galleryImages': [],
         'coverImage': '',
         'rating': '5.0',
-        'distance': '1.0 km', // Initial fallback value configuration
+        'distance': '1.0 km',
         'role': 'admin',
         'registeredAt': FieldValue.serverTimestamp(),
       });
+
+      // 4. Return the UID so the payment page can fire the ToyyibPay Cloud Function
+      return adminUid;
     } on FirebaseAuthException catch (e) {
       debugPrint("Firebase Auth Exception inside registerAdmin: ${e.message}");
       throw Exception(e.message ?? "An authentication error occurred.");

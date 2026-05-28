@@ -133,6 +133,8 @@ class _HomePageState extends State<HomePage> {
 
   Future<Map<String, dynamic>?> _fetchSoonestBooking() async {
     final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? "";
+
+    // Level 1: Strict rejection of empty/null IDs
     if (currentUserId.isEmpty) return null;
 
     final DateTime now = DateTime.now();
@@ -148,6 +150,10 @@ class _HomePageState extends State<HomePage> {
 
     for (var doc in snapshot.docs) {
       final data = doc.data() as Map<String, dynamic>? ?? {};
+
+      // Level 2: Strict Double-Validation against DB misfires
+      if (data['userId'] != currentUserId) continue;
+
       final String currentStatus = (data['status'] ?? '')
           .toString()
           .toLowerCase()

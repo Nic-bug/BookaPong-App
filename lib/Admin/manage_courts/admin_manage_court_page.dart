@@ -1,3 +1,4 @@
+import 'package:bookapong_app/Admin/admin_drawer.dart';
 import 'package:bookapong_app/Admin/manage_courts/admin_edit_slot_management.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -13,7 +14,7 @@ class AdminManageCourtPage extends StatefulWidget {
 class _AdminManageCourtPageState extends State<AdminManageCourtPage> {
   static const Color brandMaroon = Color(0xFF8B0000);
   final User? _currentUser = FirebaseAuth.instance.currentUser;
-  bool _isSaving = false; // Prevents double taps and tracks execution
+  bool _isSaving = false;
 
   void _showAddTableDialog() {
     final TextEditingController nameController = TextEditingController();
@@ -88,9 +89,6 @@ class _AdminManageCourtPageState extends State<AdminManageCourtPage> {
                           if (enteredName.isEmpty) return;
 
                           if (_currentUser == null) {
-                            debugPrint(
-                              "🚨 BOOKAPONG-DEBUG: No active Firebase Auth user session found!",
-                            );
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text("Error: Not logged in."),
@@ -99,19 +97,8 @@ class _AdminManageCourtPageState extends State<AdminManageCourtPage> {
                             return;
                           }
 
-                          // Set saving state to show processing loader
                           setDialogState(() => _isSaving = true);
                           setState(() => _isSaving = true);
-
-                          debugPrint(
-                            "🚀 BOOKAPONG-DEBUG: Preparing payload data map...",
-                          );
-                          debugPrint(
-                            "🚀 BOOKAPONG-DEBUG: Target UID -> ${_currentUser.uid}",
-                          );
-                          debugPrint(
-                            "🚀 BOOKAPONG-DEBUG: Target Document Path -> admins/${_currentUser.uid}/courts/$enteredName",
-                          );
 
                           try {
                             final docRef = FirebaseFirestore.instance
@@ -120,7 +107,6 @@ class _AdminManageCourtPageState extends State<AdminManageCourtPage> {
                                 .collection('courts')
                                 .doc(enteredName);
 
-                            // Execute write with a strict network fallback timeout
                             await docRef
                                 .set({
                                   'name': enteredName,
@@ -128,10 +114,6 @@ class _AdminManageCourtPageState extends State<AdminManageCourtPage> {
                                   'closures': {},
                                 })
                                 .timeout(const Duration(seconds: 6));
-
-                            debugPrint(
-                              "✅ BOOKAPONG-DEBUG: Write acknowledged by Firestore servers successfully!",
-                            );
 
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -143,16 +125,6 @@ class _AdminManageCourtPageState extends State<AdminManageCourtPage> {
                               );
                             }
                           } catch (e, stackTrace) {
-                            debugPrint(
-                              "❌ BOOKAPONG-DEBUG: Cloud save transaction rejected!",
-                            );
-                            debugPrint(
-                              "❌ BOOKAPONG-DEBUG: Error Message -> $e",
-                            );
-                            debugPrint(
-                              "❌ BOOKAPONG-DEBUG: StackTrace -> $stackTrace",
-                            );
-
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
@@ -201,10 +173,14 @@ class _AdminManageCourtPageState extends State<AdminManageCourtPage> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
         title: const Text(
-          "Court Management",
+          "Court",
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
       ),
+
+      // INJECTED DRAWER
+      drawer: const AdminDrawer(currentPage: 'Manage Courts'),
+
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -270,7 +246,6 @@ class _AdminManageCourtPageState extends State<AdminManageCourtPage> {
                     );
                   }
 
-                  // Sorting execution loop handling local cached nodes cleanly
                   final sortedDocs = List<QueryDocumentSnapshot>.from(docs)
                     ..sort((a, b) {
                       final aData = a.data() as Map<String, dynamic>?;

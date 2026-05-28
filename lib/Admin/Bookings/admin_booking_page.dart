@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:bookapong_app/Admin/admin_drawer.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -160,10 +161,14 @@ class _AdminBookingPageState extends State<AdminBookingPage> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
         title: const Text(
-          "Booking Management Dashboard",
+          "Booking",
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
       ),
+
+      // INJECTED DRAWER
+      drawer: const AdminDrawer(currentPage: 'Bookings'),
+
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(

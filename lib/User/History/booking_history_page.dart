@@ -19,25 +19,22 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> {
   String selectedTab = "All";
   final List<String> tabs = ["All", "Active", "Completed", "Cancelled"];
 
-  /// Fetches all user bookings in real time. Filtering is applied locally
-  /// to ensure perfect structural consistency with the Admin Dashboard.
   Query<Map<String, dynamic>> _getBaseQuery(String uid) {
     return FirebaseFirestore.instance
         .collection('bookings')
-        .where('userId', isEqualTo: uid);
+        .where('userId', isEqualTo: uid); // Level 1 Security: Query filter
   }
 
   @override
   Widget build(BuildContext context) {
-    final String currentUserId =
-        FirebaseAuth.instance.currentUser?.uid ?? "anonymous_user";
+    // STRICT CHECK: Never use a generic fallback string.
+    final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? "";
 
     return Scaffold(
       backgroundColor: beige,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
-          /// HEADER
           SliverAppBar(
             backgroundColor: beige,
             surfaceTintColor: Colors.transparent,
@@ -76,8 +73,6 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> {
               ],
             ),
           ),
-
-          /// TABS HEADER
           SliverToBoxAdapter(
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 10),
@@ -118,102 +113,124 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> {
             ),
           ),
 
-          /// LIVE FIREBASE STREAM PIPELINE
-          StreamBuilder<QuerySnapshot>(
-            stream: _getBaseQuery(currentUserId).snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return SliverToBoxAdapter(
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text(
-                        "Failed to load records: ${snapshot.error}",
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.red, fontSize: 13),
-                      ),
-                    ),
-                  ),
-                );
-              }
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return SliverToBoxAdapter(
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: CircularProgressIndicator(color: darkRed),
-                    ),
-                  ),
-                );
-              }
-
-              final rawDocs = snapshot.data?.docs ?? [];
-              final DateTime now = DateTime.now();
-              List<DocumentSnapshot> filteredDocs = [];
-
-              // Evaluate the status exactly how the Admin model does it
-              for (var doc in rawDocs) {
-                final data = doc.data() as Map<String, dynamic>? ?? {};
-                final String baseStatus = data['status'] ?? 'confirmed';
-                final Timestamp? endTimestamp = data['endTime'] as Timestamp?;
-
-                final DateTime endTimeObj = endTimestamp != null
-                    ? endTimestamp.toDate()
-                    : now;
-
-                final DateTime accessClosingTime = endTimeObj.add(
-                  const Duration(minutes: 5),
-                );
-
-                String computedStatus = "Completed";
-                if (baseStatus == "cancelled") {
-                  computedStatus = "Cancelled";
-                } else if (now.isBefore(accessClosingTime)) {
-                  computedStatus = "Active";
-                }
-
-                // Filter matching tabs locally
-                if (selectedTab == "All" || selectedTab == computedStatus) {
-                  filteredDocs.add(doc);
-                }
-              }
-
-              // Absolute chronological sorting: Newest show up first
-              filteredDocs.sort((a, b) {
-                final aData = a.data() as Map<String, dynamic>? ?? {};
-                final bData = b.data() as Map<String, dynamic>? ?? {};
-
-                final Timestamp aTime = aData['startTime'] ?? Timestamp.now();
-                final Timestamp bTime = bData['startTime'] ?? Timestamp.now();
-                return bTime.compareTo(aTime);
-              });
-
-              if (filteredDocs.isEmpty) {
-                return const SliverToBoxAdapter(
-                  child: Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(40),
-                      child: Text(
-                        "No matching bookings found.",
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ),
-                  ),
-                );
-              }
-
-              return SliverPadding(
-                padding: const EdgeInsets.fromLTRB(15, 5, 15, 15),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate((context, index) {
-                    final doc = filteredDocs[index];
-                    final data = doc.data() as Map<String, dynamic>;
-                    return _buildBookingCard(doc.id, data);
-                  }, childCount: filteredDocs.length),
+          // STRICT STREAM: Do not fetch if user is not resolved
+          if (currentUserId.isEmpty)
+            const SliverToBoxAdapter(
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.all(40),
+                  child: Text("Authenticating..."),
                 ),
-              );
-            },
-          ),
+              ),
+            )
+          else
+            StreamBuilder<QuerySnapshot>(
+              stream: _getBaseQuery(currentUserId).snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return SliverToBoxAdapter(
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          "Failed to load records: ${snapshot.error}",
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return SliverToBoxAdapter(
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: CircularProgressIndicator(color: darkRed),
+                      ),
+                    ),
+                  );
+                }
+
+                final rawDocs = snapshot.data?.docs ?? [];
+                final DateTime now = DateTime.now();
+                List<DocumentSnapshot> filteredDocs = [];
+
+                for (var doc in rawDocs) {
+                  final data = doc.data() as Map<String, dynamic>? ?? {};
+
+                  // Level 2 Security: Local ID match validation
+                  if (data['userId'] != currentUserId) continue;
+
+                  final String baseStatus = data['status'] ?? 'confirmed';
+
+                  final endVal = data['endTime'];
+                  final DateTime endTimeObj = endVal is Timestamp
+                      ? endVal.toDate()
+                      : now;
+
+                  final DateTime accessClosingTime = endTimeObj.add(
+                    const Duration(minutes: 5),
+                  );
+
+                  String computedStatus = "Completed";
+                  if (baseStatus == "cancelled") {
+                    computedStatus = "Cancelled";
+                  } else if (now.isBefore(accessClosingTime)) {
+                    computedStatus = "Active";
+                  }
+
+                  if (selectedTab == "All" || selectedTab == computedStatus) {
+                    filteredDocs.add(doc);
+                  }
+                }
+
+                filteredDocs.sort((a, b) {
+                  final aData = a.data() as Map<String, dynamic>? ?? {};
+                  final bData = b.data() as Map<String, dynamic>? ?? {};
+
+                  final aStart = aData['startTime'];
+                  final bStart = bData['startTime'];
+
+                  final Timestamp aTime = aStart is Timestamp
+                      ? aStart
+                      : Timestamp.now();
+                  final Timestamp bTime = bStart is Timestamp
+                      ? bStart
+                      : Timestamp.now();
+
+                  return bTime.compareTo(aTime);
+                });
+
+                if (filteredDocs.isEmpty) {
+                  return const SliverToBoxAdapter(
+                    child: Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(40),
+                        child: Text(
+                          "No matching bookings found.",
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
+                return SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(15, 5, 15, 15),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final doc = filteredDocs[index];
+                      final data = doc.data() as Map<String, dynamic>;
+                      return _buildBookingCard(doc.id, data);
+                    }, childCount: filteredDocs.length),
+                  ),
+                );
+              },
+            ),
         ],
       ),
     );
@@ -221,12 +238,15 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> {
 
   Widget _buildBookingCard(String docId, Map<String, dynamic> data) {
     final String baseStatus = data['status'] ?? 'confirmed';
-    final Timestamp? endTimestamp = data['endTime'] as Timestamp?;
     final DateTime now = DateTime.now();
 
-    final DateTime endTimeObj = endTimestamp != null
-        ? endTimestamp.toDate()
+    final startVal = data['startTime'];
+    final endVal = data['endTime'];
+
+    final DateTime startTimeObj = startVal is Timestamp
+        ? startVal.toDate()
         : now;
+    final DateTime endTimeObj = endVal is Timestamp ? endVal.toDate() : now;
 
     final DateTime accessClosingTime = endTimeObj.add(
       const Duration(minutes: 5),
@@ -240,15 +260,19 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> {
     }
 
     bool displayActiveActions = calculatedDisplayStatus == "Active";
-    final DateTime startTimeObj = (data['startTime'] as Timestamp).toDate();
 
     final String formattedDate = DateFormat(
       'MMM dd, yyyy',
     ).format(startTimeObj);
     final String formattedTime =
         "${DateFormat('hh:mm a').format(startTimeObj)} - ${DateFormat('hh:mm a').format(endTimeObj)}";
+
+    final num? rawAmount = data['amountPaid'] as num?;
     final String displayAmount =
-        "RM ${data['amountPaid']?.toStringAsFixed(2) ?? '27.00'}";
+        "RM ${rawAmount?.toStringAsFixed(2) ?? '27.00'}";
+
+    final String facilityName = data['facilityName'] ?? 'Unknown Facility';
+    final String table = data['table'] ?? 'Unknown Court';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
@@ -289,7 +313,7 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> {
           _buildInfoRow(
             Icons.calendar_today_outlined,
             "Court & Date",
-            "${data['facilityName']} • $formattedDate",
+            "$facilityName • $formattedDate",
           ),
           const SizedBox(height: 12),
           _buildInfoRow(Icons.access_time, "Time Slot", formattedTime),
@@ -332,7 +356,7 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> {
                         MaterialPageRoute(
                           builder: (context) => AccessCodePage(
                             accessCode: data['accessCode'] ?? "0000",
-                            court: "${data['facilityName']} - ${data['table']}",
+                            court: "$facilityName - $table",
                             date: formattedDate,
                             time: formattedTime,
                             reference: docId.substring(0, 8).toUpperCase(),

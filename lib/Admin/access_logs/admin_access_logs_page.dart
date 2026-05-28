@@ -1,7 +1,8 @@
+import 'package:bookapong_app/Admin/admin_drawer.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // Run 'flutter pub add intl' in your terminal for date formatting
+import 'package:intl/intl.dart';
 
-// 1. Data Model to easily track detailed log parameters
+// 1. Data Model
 class AccessLog {
   final DateTime timestamp;
   final String court;
@@ -13,10 +14,7 @@ class AccessLog {
     required this.accessCode,
   });
 
-  // Formats to Day & Time (e.g., "Tuesday, 2:05 PM")
   String get formattedDayTime => DateFormat('EEEE, h:mm a').format(timestamp);
-
-  // Formats to Full Date (e.g., "Dec 31, 2026")
   String get formattedDate => DateFormat('MMM dd, yyyy').format(timestamp);
 }
 
@@ -27,20 +25,19 @@ class AdminAccessLogsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     const Color brandMaroon = Color(0xFF8B0000);
 
-    // Mock List: Simulating incoming logs before your IoT device hooks into the backend
     final List<AccessLog> logs = [
       AccessLog(
-        timestamp: DateTime(2026, 12, 31, 14, 5), // Dec 31, 2026, 2:05 PM
+        timestamp: DateTime(2026, 12, 31, 14, 5),
         court: "Table 1",
         accessCode: "8426",
       ),
       AccessLog(
-        timestamp: DateTime(2026, 12, 31, 10, 2), // Dec 31, 2026, 10:02 AM
+        timestamp: DateTime(2026, 12, 31, 10, 2),
         court: "Table 2",
         accessCode: "7351",
       ),
       AccessLog(
-        timestamp: DateTime(2026, 12, 30, 11, 45), // Dec 30, 2026, 11:45 AM
+        timestamp: DateTime(2026, 12, 30, 11, 45),
         court: "Table 1",
         accessCode: "9999",
       ),
@@ -74,6 +71,10 @@ class AdminAccessLogsPage extends StatelessWidget {
           ),
         ],
       ),
+
+      // INJECTED DRAWER
+      drawer: const AdminDrawer(currentPage: 'Access Logs'),
+
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -90,7 +91,6 @@ class AdminAccessLogsPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   child: Column(
                     children: [
-                      // Updated Cleaner Table Header
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
@@ -100,8 +100,7 @@ class AdminAccessLogsPage extends StatelessWidget {
                         child: const Row(
                           children: [
                             Expanded(
-                              flex:
-                                  3, // Needs more width for detailed timestamps
+                              flex: 3,
                               child: Text(
                                 "Detailed Timestamp",
                                 style: TextStyle(fontWeight: FontWeight.bold),
@@ -125,8 +124,6 @@ class AdminAccessLogsPage extends StatelessWidget {
                         ),
                       ),
                       const Divider(height: 1),
-
-                      // Dynamic Log List Builder
                       Expanded(
                         child: ListView.separated(
                           itemCount: logs.length,
@@ -153,7 +150,6 @@ class AdminAccessLogsPage extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          // Detailed Timestamp Column (Day, Time + Date stacked vertically)
           Expanded(
             flex: 3,
             child: Column(
@@ -176,7 +172,6 @@ class AdminAccessLogsPage extends StatelessWidget {
               ],
             ),
           ),
-          // Court Column
           Expanded(
             flex: 2,
             child: Text(
@@ -184,7 +179,6 @@ class AdminAccessLogsPage extends StatelessWidget {
               style: const TextStyle(fontSize: 13, color: Colors.black87),
             ),
           ),
-          // Access Code Column
           Expanded(
             flex: 2,
             child: Text(

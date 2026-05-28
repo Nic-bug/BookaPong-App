@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:bookapong_app/Admin/admin_drawer.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -56,14 +57,12 @@ class Booking {
       }
     }
 
-    // --- Format Payment Time (createdAt) ---
     String formattedPaymentTime = "Unknown";
     if (data['createdAt'] != null && data['createdAt'] is Timestamp) {
       final DateTime createdTime = (data['createdAt'] as Timestamp).toDate();
       formattedPaymentTime = DateFormat('dd MMM, hh:mm a').format(createdTime);
     }
 
-    // --- Backend Status Logic ---
     final DateTime now = DateTime.now();
     final String baseStatus = (data['status'] ?? 'confirmed')
         .toString()
@@ -133,10 +132,7 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
   String searchQuery = "";
   String selectedCategory = "Booking ID";
 
-  // TextEditingController to prevent keyboard glitches
   final TextEditingController _searchController = TextEditingController();
-
-  // Stream variable to hold the initialized stream
   late Stream<QuerySnapshot> _bookingsStream;
 
   final List<String> categories = [
@@ -159,7 +155,6 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
   @override
   void initState() {
     super.initState();
-    // Initialize stream ONCE here to prevent rebuilding the stream on keystrokes
     final String currentAdminId =
         FirebaseAuth.instance.currentUser?.uid ?? "unknown_admin";
 
@@ -214,28 +209,16 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
           "Payment Management",
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
-        actions: const [
-          Center(
-            child: Text(
-              "Admin\nUser",
-              textAlign: TextAlign.right,
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-          ),
-          SizedBox(width: 10),
-          Padding(
-            padding: EdgeInsets.only(right: 15),
-            child: CircleAvatar(
-              backgroundColor: brandMaroon,
-              child: Text("A", style: TextStyle(color: Colors.white)),
-            ),
-          ),
-        ],
+        // The actions array containing the profile pic and admin text has been removed.
       ),
+
+      // INJECTED DRAWER
+      drawer: const AdminDrawer(currentPage: 'Payments'),
+
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: StreamBuilder<QuerySnapshot>(
-          stream: _bookingsStream, // Use the initialized stream
+          stream: _bookingsStream,
           builder: (context, snapshot) {
             if (snapshot.hasError) {
               return Center(child: Text("Error: ${snapshot.error}"));
@@ -252,7 +235,6 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
 
             final filteredBookings = _applyLiveFiltering(parsedBookings);
 
-            // Calculate revenue ONLY on the filtered items
             double totalRevenue = 0.0;
             double pendingRevenue = 0.0;
 
@@ -267,7 +249,6 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // --- 1. Mini Stats Row ---
                 Row(
                   children: [
                     _buildMiniStat(
@@ -284,13 +265,11 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
                   ],
                 ),
                 const SizedBox(height: 20),
-
-                // --- 2. Live Search & Filter Row ---
                 Row(
                   children: [
                     Expanded(
                       child: TextField(
-                        controller: _searchController, // Attach controller
+                        controller: _searchController,
                         onChanged: (value) =>
                             setState(() => searchQuery = value.trim()),
                         decoration: InputDecoration(
@@ -342,8 +321,6 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
                   ],
                 ),
                 const SizedBox(height: 15),
-
-                // --- 3. Dynamic Table Engine ---
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(

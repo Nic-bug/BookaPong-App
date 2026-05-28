@@ -1,273 +1,368 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart';
+import 'package:bookapong_app/Admin/admin_drawer.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // ✅ Added to support the logout trigger logic natively
-import 'package:bookapong_app/User/user_controller.dart';
-import 'package:bookapong_app/Admin/access_logs/admin_access_logs_page.dart';
-import 'package:bookapong_app/Admin/Bookings/admin_booking_page.dart';
-import 'package:bookapong_app/Admin/manage_courts/admin_manage_court_page.dart';
-import 'package:bookapong_app/Admin/Payments/admin_payment_page.dart';
-import 'package:bookapong_app/Admin/Profile/admin_profile_page.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 class AdminDashboardPage extends StatelessWidget {
   const AdminDashboardPage({super.key});
 
-  // Helper to handle File vs Web images
-  ImageProvider? _getProfileImage(String? path) {
-    if (path == null || path.isEmpty) return null;
-    if (kIsWeb) return NetworkImage(path);
-    final file = File(path);
-    return file.existsSync() ? FileImage(file) : null;
+  void _showUpgradeWall(
+    BuildContext context,
+    String planRequired,
+    String featureName,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.lock_person_rounded, color: Colors.amber.shade800),
+            const SizedBox(width: 10),
+            const Text("Premium Feature"),
+          ],
+        ),
+        content: Text(
+          "Access to '$featureName' requires a $planRequired Plan subscription. Upgrade your workspace tier to activate automated real-time services.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              "Maybe Later",
+              style: TextStyle(color: Colors.grey),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF8B0000),
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              // Route to your subscription/upgrade page
+            },
+            child: const Text(
+              "Upgrade Now",
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _calculatePercentage(num current, num previous) {
+    if (previous == 0) {
+      return current > 0 ? "+100% from last month" : "0% from last month";
+    }
+    double change = ((current - previous) / previous) * 100;
+    String sign = change >= 0 ? "+" : "";
+    return "$sign${change.toStringAsFixed(1)}% from last month";
   }
 
   @override
   Widget build(BuildContext context) {
     const Color brandMaroon = Color(0xFF8B0000);
-    const Color darkBg = Color(0xFF212121);
+    final String currentUid = FirebaseAuth.instance.currentUser?.uid ?? "";
+    final DateTime now = DateTime.now();
+    final String currentMonthStr = DateFormat('MMM').format(now);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
-        title: const Text(
-          "Dashboard Overview",
-          style: TextStyle(color: Colors.black),
-        ),
-      ),
-      drawer: Drawer(
-        backgroundColor: darkBg,
-        child: Column(
-          children: [
-            GestureDetector(
-              onTap: () {
-                Navigator.pop(context); // Close drawer first
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const AdminProfilePage(),
-                  ),
-                );
-              },
-              child: DrawerHeader(
-                decoration: const BoxDecoration(color: darkBg),
-                child: Row(
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('admins')
+          .doc(currentUid)
+          .snapshots(),
+      builder: (context, adminSnapshot) {
+        if (!adminSnapshot.hasData) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator(color: brandMaroon)),
+          );
+        }
+
+        final adminData =
+            adminSnapshot.data!.data() as Map<String, dynamic>? ?? {};
+        final String activePlan = adminData['subscriptionPlan'] ?? 'Standard';
+        final bool supportMarketingDashboard = activePlan == 'Premium';
+
+        // Nested Stream for Bookings Data
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('bookings')
+              .where('facilityId', isEqualTo: currentUid)
+              .snapshots(),
+          builder: (context, bookingsSnapshot) {
+            if (bookingsSnapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                body: Center(
+                  child: CircularProgressIndicator(color: brandMaroon),
+                ),
+              );
+            }
+
+            int totalBookings = 0;
+            int thisMonthBookings = 0;
+            int lastMonthBookings = 0;
+
+            int todaysBookings = 0;
+            int totalDailySlots =
+                20; // Adjust this capacity based on your facility limits
+
+            double thisMonthRevenue = 0.0;
+            double lastMonthRevenue = 0.0;
+
+            Set<String> activeUsersThisWeek = {};
+            List<Map<String, dynamic>> todaysScheduleList = [];
+
+            if (bookingsSnapshot.hasData) {
+              for (var doc in bookingsSnapshot.data!.docs) {
+                final data = doc.data() as Map<String, dynamic>;
+                totalBookings++;
+
+                Timestamp? timeStamp =
+                    data['startTime'] as Timestamp? ??
+                    data['createdAt'] as Timestamp?;
+                if (timeStamp != null) {
+                  DateTime date = timeStamp.toDate();
+
+                  bool isThisMonth =
+                      date.year == now.year && date.month == now.month;
+                  bool isLastMonth = (now.month == 1)
+                      ? (date.year == now.year - 1 && date.month == 12)
+                      : (date.year == now.year && date.month == now.month - 1);
+                  bool isToday =
+                      date.year == now.year &&
+                      date.month == now.month &&
+                      date.day == now.day;
+                  bool isThisWeek =
+                      now.difference(date).inDays <= 7 &&
+                      now.difference(date).inDays >= 0;
+
+                  // Booking Increments
+                  if (isThisMonth) thisMonthBookings++;
+                  if (isLastMonth) lastMonthBookings++;
+
+                  // Today's Occupancy & Schedule
+                  if (isToday) {
+                    todaysBookings++;
+                    todaysScheduleList.add({
+                      'time': DateFormat('hh:mm a').format(date),
+                      'details':
+                          "${data['table'] ?? 'Table Pending'} • ${data['customerName'] ?? 'Unknown'}",
+                      'status': data['status'] ?? 'Confirmed',
+                      'rawDate': date,
+                    });
+                  }
+
+                  // Revenue (Count Active or Completed)
+                  String status = (data['status'] ?? 'confirmed')
+                      .toString()
+                      .toLowerCase();
+                  if (status == 'completed' ||
+                      status == 'confirmed' ||
+                      status == 'active') {
+                    double amount = (data['amountPaid'] ?? 0.0) is num
+                        ? (data['amountPaid'] as num).toDouble()
+                        : 0.0;
+                    if (isThisMonth) thisMonthRevenue += amount;
+                    if (isLastMonth) lastMonthRevenue += amount;
+                  }
+
+                  // Active Platform Users (Weekly unique users)
+                  if (isThisWeek) {
+                    String userId =
+                        data['userId']?.toString() ??
+                        data['customerName']?.toString() ??
+                        doc.id;
+                    activeUsersThisWeek.add(userId);
+                  }
+                }
+              }
+            }
+
+            // Calculations
+            String bookingIncrementStr = _calculatePercentage(
+              thisMonthBookings,
+              lastMonthBookings,
+            );
+            String revenueIncrementStr = _calculatePercentage(
+              thisMonthRevenue,
+              lastMonthRevenue,
+            );
+
+            int availableSlots = (totalDailySlots - todaysBookings).clamp(
+              0,
+              totalDailySlots,
+            );
+            int occupancyRate = ((todaysBookings / totalDailySlots) * 100)
+                .clamp(0, 100)
+                .toInt();
+
+            // Sort schedule by time
+            todaysScheduleList.sort(
+              (a, b) => (a['rawDate'] as DateTime).compareTo(
+                b['rawDate'] as DateTime,
+              ),
+            );
+
+            return Scaffold(
+              backgroundColor: const Color(0xFFF5F5F5),
+              appBar: AppBar(
+                backgroundColor: Colors.white,
+                elevation: 0,
+                iconTheme: const IconThemeData(color: Colors.black),
+                title: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ValueListenableBuilder<String?>(
-                      valueListenable: UserController().profileImagePath,
-                      builder: (context, path, child) {
-                        final provider = _getProfileImage(path);
-                        return Container(
-                          width: 50,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white24, width: 2),
-                            image: provider != null
-                                ? DecorationImage(
-                                    image: provider,
-                                    fit: BoxFit.cover,
-                                  )
-                                : null,
-                          ),
-                          child: provider == null
-                              ? const Icon(
-                                  Icons.account_circle,
-                                  color: Colors.white,
-                                  size: 40,
-                                )
-                              : null,
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 15),
                     const Text(
-                      "BookaPong\nAdmin Panel",
+                      "Dashboard",
                       style: TextStyle(
-                        color: Colors.white,
+                        color: Colors.black,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      "$activePlan Tier Account",
+                      style: const TextStyle(
+                        color: brandMaroon,
+                        fontSize: 11,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-            _drawerTile(
-              Icons.grid_view_rounded,
-              "Dashboard",
-              true,
-              brandMaroon,
-              () {
-                Navigator.pop(
-                  context,
-                ); // Close the drawer since we are already on dashboard
-              },
-            ),
-            _drawerTile(
-              Icons.calendar_today,
-              "Bookings",
-              false,
-              brandMaroon,
-              () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const AdminBookingPage(),
-                  ),
-                );
-              },
-            ),
-            _drawerTile(
-              Icons
-                  .sports_tennis, // Changed icon from group_outlined to match courts theme beautifully
-              "Manage Courts",
-              false,
-              brandMaroon,
-              () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const AdminManageCourtPage(),
-                  ),
-                );
-              },
-            ),
-            _drawerTile(Icons.security, "Access Logs", false, brandMaroon, () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AdminAccessLogsPage(),
+
+              drawer: const AdminDrawer(currentPage: 'Dashboard'),
+
+              body: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildStatCard(
+                      "Total Bookings",
+                      totalBookings.toString(),
+                      bookingIncrementStr,
+                      Icons.calendar_today,
+                      Colors.blue.shade100,
+                      Colors.blue,
+                    ),
+                    _buildStatCard(
+                      "Today's Occupancy",
+                      "$occupancyRate%",
+                      "$availableSlots slots still available",
+                      Icons.check_circle_outline,
+                      Colors.green.shade100,
+                      Colors.green,
+                    ),
+                    _buildStatCard(
+                      "Revenue ($currentMonthStr)",
+                      "RM ${thisMonthRevenue.toStringAsFixed(2)}",
+                      revenueIncrementStr,
+                      Icons.attach_money,
+                      Colors.purple.shade100,
+                      Colors.purple,
+                    ),
+
+                    Stack(
+                      children: [
+                        _buildStatCard(
+                          "Active Platform Users",
+                          activeUsersThisWeek.length.toString(),
+                          "Users booked in the last 7 days",
+                          Icons.people_outline,
+                          Colors.orange.shade100,
+                          Colors.orange,
+                        ),
+                        if (!supportMarketingDashboard)
+                          Positioned.fill(
+                            child: GestureDetector(
+                              onTap: () => _showUpgradeWall(
+                                context,
+                                "Premium",
+                                "Advanced Marketing Analytics",
+                              ),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.85),
+                                  borderRadius: BorderRadius.circular(15),
+                                ),
+                                child: Center(
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.lock_rounded,
+                                        color: Colors.amber.shade900,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        "Unlock with Premium Plan",
+                                        style: TextStyle(
+                                          color: Colors.amber.shade900,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
+                    const Text(
+                      "Today's Schedule",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+
+                    if (todaysScheduleList.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 20),
+                        child: Center(
+                          child: Text(
+                            "No bookings scheduled for today.",
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ),
+                      )
+                    else
+                      ...todaysScheduleList.map((schedule) {
+                        String statusStr = schedule['status']
+                            .toString()
+                            .toLowerCase();
+                        Color statColor = Colors.blue;
+                        if (statusStr == 'completed') statColor = Colors.blue;
+                        if (statusStr == 'active' || statusStr == 'confirmed')
+                          statColor = Colors.green;
+                        if (statusStr == 'cancelled') statColor = Colors.red;
+
+                        return _scheduleItem(
+                          schedule['time'],
+                          schedule['details'],
+                          statusStr.isNotEmpty
+                              ? '${statusStr[0].toUpperCase()}${statusStr.substring(1)}'
+                              : 'Unknown',
+                          statColor,
+                        );
+                      }),
+                  ],
                 ),
-              );
-            }),
-            _drawerTile(Icons.attach_money, "Payments", false, brandMaroon, () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AdminPaymentsPage(),
-                ),
-              );
-            }),
-            const Spacer(),
-
-            // ✅ Fully Implemented Logout Action Tile
-            _drawerTile(Icons.logout, "Logout", false, brandMaroon, () async {
-              // Close the open navigation drawer layout frame safely
-              Navigator.pop(context);
-
-              try {
-                // Destroys the cloud token session string completely.
-                // The main.dart StreamBuilder handles shifting the view back to LoginPage immediately.
-                await FirebaseAuth.instance.signOut();
-                debugPrint(
-                  "✅ Admin successfully disconnected and session terminated.",
-                );
-              } catch (e) {
-                debugPrint(
-                  "❌ Failure encountered during Admin logout routine processing execution sequence: $e",
-                );
-              }
-            }),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildStatCard(
-              "Total Bookings",
-              "142",
-              "+12% from last month",
-              Icons.calendar_today,
-              Colors.blue.shade100,
-              Colors.blue,
-            ),
-            _buildStatCard(
-              "Today's Occupancy",
-              "85%",
-              "17 of 20 slots booked",
-              Icons.check_circle_outline,
-              Colors.green.shade100,
-              Colors.green,
-            ),
-            _buildStatCard(
-              "Revenue (Dec)",
-              "RM 3,840",
-              "+18% from last month",
-              Icons.attach_money,
-              Colors.purple.shade100,
-              Colors.purple,
-            ),
-            _buildStatCard(
-              "Active Users",
-              "68",
-              "+8 new this week",
-              Icons.people_outline,
-              Colors.orange.shade100,
-              Colors.orange,
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              "Today's Schedule",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 15),
-            _scheduleItem(
-              "09:00 AM",
-              "Table 1 • John Doe",
-              "Completed",
-              Colors.blue,
-            ),
-            _scheduleItem(
-              "10:00 AM",
-              "Table 2 • Jane Smith",
-              "Active",
-              Colors.green,
-            ),
-            _scheduleItem(
-              "11:00 AM",
-              "Table 1 • Mike Johnson",
-              "Upcoming",
-              Colors.grey,
-            ),
-            _scheduleItem(
-              "02:00 PM",
-              "Table 2 • Sarah Williams",
-              "Upcoming",
-              Colors.grey,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _drawerTile(
-    IconData icon,
-    String title,
-    bool isSelected,
-    Color activeColor,
-    VoidCallback onTap,
-  ) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: isSelected ? activeColor : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: ListTile(
-        leading: Icon(icon, color: Colors.white),
-        title: Text(title, style: const TextStyle(color: Colors.white)),
-        onTap: onTap,
-      ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -301,7 +396,12 @@ class AdminDashboardPage extends StatelessWidget {
                 ),
                 child: Icon(icon, color: iconColor),
               ),
-              const Icon(Icons.trending_up, color: Colors.green, size: 20),
+              if (sub.contains('+') ||
+                  sub.contains('available') ||
+                  sub.contains('Users'))
+                const Icon(Icons.trending_up, color: Colors.green, size: 20)
+              else if (sub.contains('-'))
+                const Icon(Icons.trending_down, color: Colors.red, size: 20),
             ],
           ),
           const SizedBox(height: 15),
@@ -311,7 +411,15 @@ class AdminDashboardPage extends StatelessWidget {
             style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 5),
-          Text(sub, style: const TextStyle(color: Colors.green, fontSize: 12)),
+          Text(
+            sub,
+            style: TextStyle(
+              color: sub.contains('-') && !sub.contains('available')
+                  ? Colors.red
+                  : Colors.green,
+              fontSize: 12,
+            ),
+          ),
         ],
       ),
     );
