@@ -4,4 +4,11 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <application>
+        <!-- Injects the API key specifically into your local debug builds -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyA7eYlY1oF0eLDlPl0xRAupZDYi4104aV0" />
+    </application>
 </manifest>

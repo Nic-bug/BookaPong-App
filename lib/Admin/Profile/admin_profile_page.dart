@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:bookapong_app/Admin/map_location_picker_page.dart';
 import 'package:bookapong_app/main.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -394,17 +395,67 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                     ),
                   ),
                   const Divider(height: 1, indent: 60),
+
+                  // Make sure to import the new page at the top of your file
+                  // import 'map_location_picker_page.dart';
                   _buildInfoTile(
                     Icons.location_on_outlined,
                     "Address Location",
                     addressLocation,
                     darkMaroon,
-                    onTap: () => _navigateToEditField(
-                      title: "Address Location",
-                      currentValue: addressLocation,
-                      icon: Icons.location_on_outlined,
-                      firestoreFieldKey: "addressLocation",
-                    ),
+                    onTap: () async {
+                      // 1. Navigate to the Map Picker
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const MapLocationPickerPage(),
+                        ),
+                      );
+
+                      // 2. If the admin confirmed a location, save it to Firebase
+                      if (result != null && _currentUser != null) {
+                        final String newAddress = result['address'];
+                        final double lat = result['latitude'];
+                        final double lng = result['longitude'];
+
+                        try {
+                          // Save both the readable address and the Geo-coordinates
+                          await FirebaseFirestore.instance
+                              .collection('admins')
+                              .doc(_currentUser!.uid)
+                              .update({
+                                'addressLocation': newAddress,
+                                'locationCoords': GeoPoint(
+                                  lat,
+                                  lng,
+                                ), // Storing as a Firestore GeoPoint
+                              });
+
+                          // Update local memory
+                          setState(() {
+                            CenterDataStore.addressLocation = newAddress;
+                          });
+
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Location updated successfully!"),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text("Failed to update location: $e"),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        }
+                      }
+                    },
                   ),
                 ]),
                 const SizedBox(height: 25),

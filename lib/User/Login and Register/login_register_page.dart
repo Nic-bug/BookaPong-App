@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:bookapong_app/User/Forgot%20Password/forgot_password_page.dart';
 import 'package:bookapong_app/Logo/pong_logo.dart';
 import 'package:bookapong_app/Splash%20Screen/admin_splash_screen.dart';
+import 'package:bookapong_app/Admin/Register/admin_register_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -105,7 +106,6 @@ class _LoginPageState extends State<LoginPage> {
               'createdAt': FieldValue.serverTimestamp(),
             });
       }
-      // Navigation is handled automatically by AuthWrapper
     } on FirebaseAuthException catch (e) {
       String message = e.message ?? 'Authentication error.';
       if (e.code == 'user-not-found')
@@ -307,7 +307,17 @@ class _LoginPageState extends State<LoginPage> {
                           onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const AdminSplashScreen(),
+                              builder: (context) => AdminSplashScreen(
+                                durationSeconds: 2,
+                                onComplete: () {
+                                  Navigator.pushReplacement(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const AdminRegisterPage(),
+                                    ),
+                                  );
+                                },
+                              ),
                             ),
                           ),
                           child: RichText(

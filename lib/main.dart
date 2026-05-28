@@ -1,3 +1,4 @@
+import 'package:bookapong_app/Splash%20Screen/splash_screen_page.dart';
 import 'package:bookapong_app/User/Login%20and%20Register/login_register_page.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -9,7 +10,6 @@ import 'package:bookapong_app/Admin/Dashboard/admin_dashboard_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   try {
     await Firebase.initializeApp();
     await FirebaseAppCheck.instance.activate(
@@ -18,7 +18,6 @@ void main() async {
   } catch (e) {
     debugPrint("Firebase init error: $e");
   }
-
   runApp(const MyApp());
 }
 
@@ -31,7 +30,18 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'BookaPong',
       theme: ThemeData(useMaterial3: true),
-      home: const AuthWrapper(),
+      // App Startup Splash
+      home: SplashScreen(
+        durationSeconds: 3,
+        onComplete: () {
+          runApp(
+            const MaterialApp(
+              debugShowCheckedModeBanner: false,
+              home: AuthWrapper(),
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -47,7 +57,10 @@ class AuthWrapper extends StatelessWidget {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+            backgroundColor: Color(0xFFFDF7E7),
+            body: Center(
+              child: CircularProgressIndicator(color: Color(0xFF800020)),
+            ),
           );
         }
 
@@ -61,7 +74,7 @@ class AuthWrapper extends StatelessWidget {
   }
 }
 
-// Role Checker
+// Role Checker & Instant Redirect Handler
 class RoleBasedRedirect extends StatefulWidget {
   const RoleBasedRedirect({super.key});
 
@@ -70,6 +83,8 @@ class RoleBasedRedirect extends StatefulWidget {
 }
 
 class _RoleBasedRedirectState extends State<RoleBasedRedirect> {
+  String? _determinedRole;
+
   @override
   void initState() {
     super.initState();
@@ -80,90 +95,54 @@ class _RoleBasedRedirectState extends State<RoleBasedRedirect> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        _goToLogin();
+        FirebaseAuth.instance.signOut();
         return;
       }
 
-      // 1. Check the 'users' collection first
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
-          .get()
-          .timeout(const Duration(seconds: 6));
-
+          .get();
       if (userDoc.exists) {
         final role = (userDoc.data()?['role'] ?? 'user')
             .toString()
             .toLowerCase()
             .trim();
-        debugPrint("✅ Found in Users Collection. Role: $role");
-
-        if (mounted) {
-          if (role == 'admin') {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const AdminDashboardPage()),
-            );
-          } else {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const HomePage()),
-            );
-          }
-        }
-        return; // Stop execution here if found
-      }
-
-      // 2. If not in 'users', check the 'admins' collection
-      final adminDoc = await FirebaseFirestore.instance
-          .collection('admins')
-          .doc(user.uid)
-          .get()
-          .timeout(const Duration(seconds: 6));
-
-      if (adminDoc.exists) {
-        debugPrint("✅ Found in Admins Collection.");
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const AdminDashboardPage()),
-          );
-        }
+        if (mounted) setState(() => _determinedRole = role);
         return;
       }
 
-      // 3. Fallback if they exist in Auth but have no Firestore document
-      debugPrint(
-        "⚠️ User found in Auth but no Firestore document exists. Defaulting to Home.",
-      );
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const HomePage()),
-        );
+      final adminDoc = await FirebaseFirestore.instance
+          .collection('admins')
+          .doc(user.uid)
+          .get();
+      if (adminDoc.exists) {
+        if (mounted) setState(() => _determinedRole = 'admin');
+        return;
       }
+
+      if (mounted) setState(() => _determinedRole = 'user');
     } catch (e) {
       debugPrint("⚠️ Redirect error: $e");
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const HomePage()),
-        );
-      }
-    }
-  }
-
-  void _goToLogin() {
-    if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginPage()),
-      );
+      if (mounted) setState(() => _determinedRole = 'user');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_determinedRole == null) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFFDF7E7),
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF800020)),
+        ),
+      );
+    }
+
+    if (_determinedRole == 'admin') {
+      return const AdminDashboardPage();
+    }
+
+    return const HomePage();
   }
 }

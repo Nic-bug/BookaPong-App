@@ -74,10 +74,9 @@ class AdminDashboardPage extends StatelessWidget {
           .doc(currentUid)
           .snapshots(),
       builder: (context, adminSnapshot) {
+        // Use unified skeleton loader for Admin Data
         if (!adminSnapshot.hasData) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator(color: brandMaroon)),
-          );
+          return _buildSkeletonLoader();
         }
 
         final adminData =
@@ -92,12 +91,9 @@ class AdminDashboardPage extends StatelessWidget {
               .where('facilityId', isEqualTo: currentUid)
               .snapshots(),
           builder: (context, bookingsSnapshot) {
+            // Use unified skeleton loader for Bookings Data
             if (bookingsSnapshot.connectionState == ConnectionState.waiting) {
-              return const Scaffold(
-                body: Center(
-                  child: CircularProgressIndicator(color: brandMaroon),
-                ),
-              );
+              return _buildSkeletonLoader();
             }
 
             int totalBookings = 0;
@@ -233,9 +229,7 @@ class AdminDashboardPage extends StatelessWidget {
                   ],
                 ),
               ),
-
               drawer: const AdminDrawer(currentPage: 'Dashboard'),
-
               body: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -265,7 +259,6 @@ class AdminDashboardPage extends StatelessWidget {
                       Colors.purple.shade100,
                       Colors.purple,
                     ),
-
                     Stack(
                       children: [
                         _buildStatCard(
@@ -315,7 +308,6 @@ class AdminDashboardPage extends StatelessWidget {
                           ),
                       ],
                     ),
-
                     const SizedBox(height: 20),
                     const Text(
                       "Today's Schedule",
@@ -325,7 +317,6 @@ class AdminDashboardPage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 15),
-
                     if (todaysScheduleList.isEmpty)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 20),
@@ -343,8 +334,9 @@ class AdminDashboardPage extends StatelessWidget {
                             .toLowerCase();
                         Color statColor = Colors.blue;
                         if (statusStr == 'completed') statColor = Colors.blue;
-                        if (statusStr == 'active' || statusStr == 'confirmed')
+                        if (statusStr == 'active' || statusStr == 'confirmed') {
                           statColor = Colors.green;
+                        }
                         if (statusStr == 'cancelled') statColor = Colors.red;
 
                         return _scheduleItem(
@@ -470,6 +462,125 @@ class AdminDashboardPage extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // --- SKELETON LOADER COMPONENTS ---
+
+  Widget _buildSkeletonLoader() {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F5),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _skeletonBox(width: 120, height: 18),
+            const SizedBox(height: 5),
+            _skeletonBox(width: 150, height: 12),
+          ],
+        ),
+      ),
+      drawer: const AdminDrawer(currentPage: 'Dashboard'),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _skeletonStatCard(),
+            _skeletonStatCard(),
+            _skeletonStatCard(),
+            _skeletonStatCard(),
+            const SizedBox(height: 20),
+            _skeletonBox(
+              width: 140,
+              height: 22,
+            ), // "Today's Schedule" placeholder
+            const SizedBox(height: 15),
+            _skeletonScheduleItem(),
+            _skeletonScheduleItem(),
+            _skeletonScheduleItem(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _skeletonStatCard() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 15),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _skeletonBox(width: 40, height: 40, borderRadius: 10), // Icon Box
+              _skeletonBox(
+                width: 24,
+                height: 24,
+                borderRadius: 12,
+              ), // Trending Icon
+            ],
+          ),
+          const SizedBox(height: 15),
+          _skeletonBox(width: 100, height: 14), // Title
+          const SizedBox(height: 8),
+          _skeletonBox(width: 60, height: 24), // Value
+          const SizedBox(height: 8),
+          _skeletonBox(width: 140, height: 12), // Subtitle
+        ],
+      ),
+    );
+  }
+
+  Widget _skeletonScheduleItem() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          _skeletonBox(width: 18, height: 18, borderRadius: 9), // Time Icon
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _skeletonBox(width: 70, height: 14), // Time
+                const SizedBox(height: 6),
+                _skeletonBox(width: 130, height: 12), // Details
+              ],
+            ),
+          ),
+          _skeletonBox(width: 80, height: 26, borderRadius: 5), // Status Tag
+        ],
+      ),
+    );
+  }
+
+  Widget _skeletonBox({
+    required double width,
+    required double height,
+    double borderRadius = 4,
+  }) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade300,
+        borderRadius: BorderRadius.circular(borderRadius),
       ),
     );
   }

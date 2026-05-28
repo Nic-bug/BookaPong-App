@@ -1,11 +1,16 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:bookapong_app/Logo/pong_logo.dart';
-// Ensure this path matches your Admin Register page location
-import 'package:bookapong_app/Admin/Register/admin_register_page.dart';
 
 class AdminSplashScreen extends StatefulWidget {
-  const AdminSplashScreen({super.key});
+  final VoidCallback? onComplete;
+  final int durationSeconds;
+
+  const AdminSplashScreen({
+    super.key,
+    this.onComplete,
+    this.durationSeconds = 2,
+  });
 
   @override
   State<AdminSplashScreen> createState() => _AdminSplashScreenState();
@@ -14,42 +19,36 @@ class AdminSplashScreen extends StatefulWidget {
 class _AdminSplashScreenState extends State<AdminSplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<Color?> _colorAnimation; // Changed to Color animation
+  late Animation<Color?> _colorAnimation;
+  Timer? _timer;
 
   final Color darkBg = const Color(0xFF2D2D2D);
-  final Color brandMaroon = const Color(
-    0xFF8B0000,
-  ); // Your Admin Register color
+  final Color brandMaroon = const Color(0xFF8B0000);
 
   @override
   void initState() {
     super.initState();
 
     _controller = AnimationController(
-      duration: const Duration(
-        milliseconds: 800,
-      ), // Slightly slower for a smoother pulse
+      duration: const Duration(milliseconds: 800),
       vsync: this,
     )..repeat(reverse: true);
 
-    // This creates the "blinking" effect between a muted red and the bright brand maroon
     _colorAnimation = ColorTween(
-      begin: const Color(0xFF4A0000), // Very dark/muted red
-      end: brandMaroon, // Your target dark red
+      begin: const Color(0xFF4A0000),
+      end: brandMaroon,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
 
-    Timer(const Duration(seconds: 4), () {
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const AdminRegisterPage()),
-        );
-      }
-    });
+    if (widget.onComplete != null) {
+      _timer = Timer(Duration(seconds: widget.durationSeconds), () {
+        if (mounted) widget.onComplete!();
+      });
+    }
   }
 
   @override
   void dispose() {
+    _timer?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -62,7 +61,6 @@ class _AdminSplashScreenState extends State<AdminSplashScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Use AnimatedBuilder to rebuild the logo with the new color on every frame
             AnimatedBuilder(
               animation: _colorAnimation,
               builder: (context, child) {

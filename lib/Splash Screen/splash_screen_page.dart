@@ -1,11 +1,12 @@
 import 'dart:async';
-import 'package:bookapong_app/User/Login%20and%20Register/login_register_page.dart';
 import 'package:flutter/material.dart';
 import 'package:bookapong_app/Logo/pong_logo.dart';
-// Import Login Page
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+  final VoidCallback? onComplete;
+  final int durationSeconds;
+
+  const SplashScreen({super.key, this.onComplete, this.durationSeconds = 2});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -15,6 +16,7 @@ class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
+  Timer? _timer;
 
   @override
   void initState() {
@@ -30,19 +32,16 @@ class _SplashScreenState extends State<SplashScreen>
       end: 1.0,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
 
-    /// ✅ NAVIGATE TO LOGIN PAGE AFTER 5 SECONDS
-    Timer(const Duration(seconds: 5), () {
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const LoginPage()),
-        );
-      }
-    });
+    if (widget.onComplete != null) {
+      _timer = Timer(Duration(seconds: widget.durationSeconds), () {
+        if (mounted) widget.onComplete!();
+      });
+    }
   }
 
   @override
   void dispose() {
+    _timer?.cancel();
     _controller.dispose();
     super.dispose();
   }
