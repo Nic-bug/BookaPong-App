@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:bookapong_app/User/Login%20and%20Register/login_register_page.dart';
+import 'package:bookapong_app/main.dart';
 import 'package:flutter/foundation.dart';
 import 'package:bookapong_app/User/user_controller.dart';
 import 'package:flutter/material.dart';
@@ -73,10 +73,12 @@ class _ProfilePageState extends State<ProfilePage> {
       // 1. Sign out
       await FirebaseAuth.instance.signOut();
 
-      // 2. Force clear entire navigation stack and go to LoginPage
+      // 2. Force clear entire navigation stack and go to AuthWrapper
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const LoginPage()),
+          MaterialPageRoute(
+            builder: (context) => const AuthWrapper(),
+          ), // THIS IS THE FIX
           (Route<dynamic> route) => false, // This removes ALL previous screens
         );
       }

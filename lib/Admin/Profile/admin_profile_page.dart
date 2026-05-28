@@ -1,10 +1,10 @@
 import 'dart:io';
+import 'package:bookapong_app/main.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:bookapong_app/User/Login%20and%20Register/login_register_page.dart';
 import 'package:bookapong_app/cloud_storage_helper.dart'; // Imports your universal cloud helper tool
 import 'admin_edit_profile_page.dart';
 
@@ -516,7 +516,8 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                         Navigator.pushAndRemoveUntil(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const LoginPage(),
+                            builder: (context) =>
+                                const AuthWrapper(), // THIS IS THE FIX
                           ),
                           (route) => false,
                         );
