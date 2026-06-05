@@ -57,28 +57,58 @@ class _AvailableSlotsPageState extends State<AvailableSlotsPage> {
     });
   }
 
+  /// Evaluates whether a slot has at least 30 minutes of remaining playtime left.
   bool _isSlotTimeValid(String dateStr, String timeSlotStr) {
     final now = DateTime.now();
     final todayStr = DateFormat('yyyy-MM-dd').format(now);
 
+    // If it's a future date, the remaining time condition doesn't apply yet
     if (dateStr != todayStr) return true;
 
     try {
-      final String startTimeStr = timeSlotStr.split('-').first.trim();
-      final DateFormat inputFormat = DateFormat('hh:mm a');
-      final DateTime parsedStartTime = inputFormat.parse(startTimeStr);
+      // 1. Extract the END time of the slot (e.g., "11-12 pm" -> split yields "12 pm")
+      final List<String> parts = timeSlotStr.split('-');
+      if (parts.length < 2) return false;
 
-      final DateTime comparisonTime = DateTime(
+      String endTimeStr = parts.last.trim().toUpperCase();
+
+      // 2. Normalize space formatting (e.g., "12PM" -> "12 PM")
+      if (!endTimeStr.contains(' ')) {
+        endTimeStr = endTimeStr.replaceAll('AM', ' AM').replaceAll('PM', ' PM');
+      }
+
+      int hour = 0;
+      int minute = 0;
+
+      // 3. Robust parsing structural check
+      if (endTimeStr.contains(':')) {
+        final DateFormat inputFormat = DateFormat('hh:mm a');
+        final DateTime parsed = inputFormat.parse(endTimeStr);
+        hour = parsed.hour;
+        minute = parsed.minute;
+      } else {
+        final DateFormat inputFormat = DateFormat('hh a');
+        final DateTime parsed = inputFormat.parse(endTimeStr);
+        hour = parsed.hour;
+        minute = parsed.minute;
+      }
+
+      // 4. Set the slot's expiration time object for today
+      final DateTime slotEndTime = DateTime(
         now.year,
         now.month,
         now.day,
-        parsedStartTime.hour,
-        parsedStartTime.minute,
+        hour,
+        minute,
       );
 
-      return now.isBefore(comparisonTime);
+      // 5. Calculate remaining playtime duration window
+      final Duration remainingPlaytime = slotEndTime.difference(now);
+
+      // Slot is bookable if there are at least 30 minutes left to play
+      return remainingPlaytime.inMinutes >= 30;
     } catch (e) {
-      debugPrint("Error parsing time window boundary: $e");
+      debugPrint("Playtime tracking error parsing '$timeSlotStr': $e");
       return false;
     }
   }
@@ -299,19 +329,7 @@ class _AvailableSlotsPageState extends State<AvailableSlotsPage> {
               ),
 
               // ── Slot list via targeted collection query ─────────────────
-              //
-              // FIX: Instead of collectionGroup('slots') — which pulls slots
-              // from ALL facilities — we now query the specific facility's
-              // courts subcollection.  This means a booking at Facility A
-              // can never bleed into Facility B's slot list.
-              //
-              // We also pass `isAvailable` straight from the Firestore stream
-              // snapshot so the card reflects the live database state.  When
-              // BookingSummaryPage commits its batch (set booking + update
-              // isAvailable=false), this StreamBuilder rebuilds automatically
-              // and marks the slot as Booked.
               StreamBuilder<QuerySnapshot>(
-                // ✅ FIXED: scoped to this facility only, not collectionGroup
                 stream: FirebaseFirestore.instance
                     .collectionGroup('slots')
                     .where(
@@ -346,7 +364,6 @@ class _AvailableSlotsPageState extends State<AvailableSlotsPage> {
                     );
                   }
 
-                  // ✅ FIXED: filter by facilityId path AND targetDate
                   final List<QueryDocumentSnapshot> filteredSlots = snapshot
                       .data!
                       .docs
@@ -355,7 +372,6 @@ class _AvailableSlotsPageState extends State<AvailableSlotsPage> {
                         if (data == null || data['targetDate'] == null)
                           return false;
 
-                        // Ensure this slot belongs to the correct facility
                         final docPath = doc.reference.path;
                         return docPath.contains(
                           'admins/${widget.facilityId}/courts/',
@@ -371,7 +387,6 @@ class _AvailableSlotsPageState extends State<AvailableSlotsPage> {
                     return aTime.compareTo(bTime);
                   });
 
-                  // Keep an up-to-date reference for the "Next" button
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (mounted) {
                       loadedStreamSlots = filteredSlots;
@@ -410,8 +425,6 @@ class _AvailableSlotsPageState extends State<AvailableSlotsPage> {
                         final data = doc.data() as Map<String, dynamic>;
 
                         final docPathParts = doc.reference.path.split('/');
-                        // Path: admins/{fId}/courts/{courtName}/slots/{slotId}
-                        // Index:   0      1     2       3         4      5
                         final String courtName = docPathParts.length >= 4
                             ? docPathParts[3]
                             : 'Unknown';
@@ -430,22 +443,18 @@ class _AvailableSlotsPageState extends State<AvailableSlotsPage> {
 
                         final String timeSlotStr = data['time'] ?? 'N/A';
 
-                        // ✅ FIXED: isAvailable comes directly from the
-                        // live Firestore snapshot — no extra fetch needed.
-                        // When BookingSummaryPage runs its batch write and
-                        // sets isAvailable=false, this StreamBuilder fires
-                        // and rebuilds the card as "Booked" automatically.
                         final bool backendAvailable =
                             data['isAvailable'] ?? true;
+
                         final bool timeFenceValid = _isSlotTimeValid(
                           selectedTargetDateStr,
                           timeSlotStr,
                         );
 
+                        // Unified constraint composition check
                         final bool finalAvailable =
                             backendAvailable && timeFenceValid;
 
-                        // Deselect if the slot just became unavailable
                         if (selectedSlotIndex == index && !finalAvailable) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             if (mounted) {
@@ -460,6 +469,7 @@ class _AvailableSlotsPageState extends State<AvailableSlotsPage> {
                             time: timeSlotStr,
                             table: courtName,
                             available: finalAvailable,
+                            isBooked: !backendAvailable,
                             isSelected: selectedSlotIndex == index,
                             themeColor: darkRed,
                             price: totalGross,
@@ -506,12 +516,6 @@ class _AvailableSlotsPageState extends State<AvailableSlotsPage> {
                                   loadedStreamSlots[selectedSlotIndex!];
 
                               try {
-                                // ── Last-mile server check ──────────────
-                                // Even though the stream already reflects
-                                // isAvailable=false for booked slots, we do
-                                // one final server-read here to guard against
-                                // the narrow race window between a user
-                                // selecting a slot and tapping "Next Step".
                                 final freshSnapshot = await targetSlotDoc
                                     .reference
                                     .get(
@@ -612,6 +616,7 @@ class SlotCard extends StatelessWidget {
   final String time;
   final String table;
   final bool available;
+  final bool isBooked;
   final bool isSelected;
   final Color themeColor;
   final double price;
@@ -622,6 +627,7 @@ class SlotCard extends StatelessWidget {
     required this.time,
     required this.table,
     required this.available,
+    required this.isBooked,
     required this.isSelected,
     required this.themeColor,
     required this.price,
@@ -703,7 +709,9 @@ class SlotCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      available ? "Available" : "Booked",
+                      isBooked
+                          ? "Booked"
+                          : (available ? "Available" : "Disabled"),
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
