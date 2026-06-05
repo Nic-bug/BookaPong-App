@@ -654,7 +654,7 @@ class _HomePageState extends State<HomePage> {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   child: Text(
-                    "No operational slots mapped for today.",
+                    "No available slots for today.",
                     style: TextStyle(
                       color: Colors.grey.shade600,
                       fontSize: 13,
