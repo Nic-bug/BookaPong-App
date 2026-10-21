@@ -12,9 +12,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await Firebase.initializeApp();
-    await FirebaseAppCheck.instance.activate(
-      androidProvider: AndroidProvider.debug,
-    );
+    await FirebaseAppCheck.instance.activate();
   } catch (e) {
     debugPrint("Firebase init error: $e");
   }
