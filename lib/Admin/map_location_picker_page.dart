@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:geocoding/geocoding.dart';
+import 'package:geocoding/geocoding.dart' as geo;
 
 class MapLocationPickerPage extends StatefulWidget {
   final double initialLat;
@@ -18,7 +18,7 @@ class MapLocationPickerPage extends StatefulWidget {
 
 class _MapLocationPickerPageState extends State<MapLocationPickerPage> {
   LatLng? _selectedLocation;
-  String _currentAddress = "Tap on the map to select location";
+  String _currentAddress = "Loading address...";
   bool _isLoadingAddress = false;
   final Color brandMaroon = const Color(0xFF8B0000);
 
@@ -26,28 +26,52 @@ class _MapLocationPickerPageState extends State<MapLocationPickerPage> {
   void initState() {
     super.initState();
     _selectedLocation = LatLng(widget.initialLat, widget.initialLng);
+    _getAddressFromLatLng(_selectedLocation!);
   }
 
   Future<void> _getAddressFromLatLng(LatLng position) async {
     setState(() => _isLoadingAddress = true);
     try {
-      List<Placemark> placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
+      final List<geo.Placemark> placemarks = await geo.Geocoding()
+          .placemarkFromCoordinates(position.latitude, position.longitude);
+
+      if (!mounted) return;
+
       if (placemarks.isNotEmpty) {
-        Placemark place = placemarks[0];
+        final geo.Placemark place = placemarks.first;
+
+        final addressParts = <String>[
+          if (place.street != null && place.street!.trim().isNotEmpty)
+            place.street!,
+          if (place.subLocality != null && place.subLocality!.trim().isNotEmpty)
+            place.subLocality!,
+          if (place.locality != null && place.locality!.trim().isNotEmpty)
+            place.locality!,
+          if (place.postalCode != null && place.postalCode!.trim().isNotEmpty)
+            place.postalCode!,
+          if (place.country != null && place.country!.trim().isNotEmpty)
+            place.country!,
+        ];
+
         setState(() {
-          _currentAddress =
-              '${place.street}, ${place.subLocality}, ${place.locality}, ${place.postalCode}, ${place.country}';
+          _currentAddress = addressParts.isNotEmpty
+              ? addressParts.join(', ')
+              : "Location selected (no detailed street name).";
+        });
+      } else {
+        setState(() {
+          _currentAddress = "No address found for this location.";
         });
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _currentAddress = "Could not fetch address for this location.";
       });
     } finally {
-      setState(() => _isLoadingAddress = false);
+      if (mounted) {
+        setState(() => _isLoadingAddress = false);
+      }
     }
   }
 
@@ -66,7 +90,6 @@ class _MapLocationPickerPageState extends State<MapLocationPickerPage> {
             onPressed: _selectedLocation == null
                 ? null
                 : () {
-                    // Return both coordinates and the parsed address back to the previous screen
                     Navigator.pop(context, {
                       'latitude': _selectedLocation!.latitude,
                       'longitude': _selectedLocation!.longitude,

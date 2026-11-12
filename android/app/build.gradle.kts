@@ -1,3 +1,5 @@
+extra["FirebaseSDKVersion"] = "34.4.0"
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -7,23 +9,24 @@ plugins {
 
 android {
     namespace = "com.nicoleann.bookapong"
-    
-    compileSdk = flutter.compileSdkVersion
+
+    // Required by geocoding_android
+    compileSdk = 36
     ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_11.toString()
     }
 
     defaultConfig {
         applicationId = "com.nicoleann.bookapong"
-        
-        // Bumped to 24 to optimize dex merging and eliminate multi-dex install lags
-        minSdk = 24 
+
+        minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
